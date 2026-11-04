@@ -9,7 +9,7 @@ bash scripts/setup-dev.sh
 .venv/bin/python scripts/smoke-dev.py
 ```
 
-Skrypt tworzy `.venv` i, jeśli go brakuje, `.env` z przykładu. Zachowuje istniejący `.env`. Zależności pochodzą z `requirements.txt`, które obecnie nie przypina wersji.
+Skrypt tworzy `.venv` i, jeśli go brakuje, `.env` z przykładu. Zachowuje istniejący `.env`. Zależności pochodzą z `requirements.txt`, które obecnie nie przypina wersji. Domyślnie pomijane są opcjonalne pakiety FUSE, więc tryb STRM nie wymaga `pkg-config` ani nagłówków libfuse. Jeśli potrzebujesz FUSE, na Debianie/Ubuntu zainstaluj `sudo apt-get install pkg-config libfuse-dev build-essential`, a potem wykonaj `INSTALL_FUSE=1 bash scripts/setup-dev.sh`. FUSE wymaga także dostępu do `/dev/fuse`; ten wariant nie był sprawdzany w chmurze.
 
 Wpisz klucz wyłącznie w lokalnym `.env` jako `TORBOX_API_KEY`. Następnie:
 
