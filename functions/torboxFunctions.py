@@ -1,10 +1,11 @@
-from library.http import api_http_client, search_api_http_client, general_http_client, requestWrapper
+from library.http import api_http_client, general_http_client, requestWrapper
 import httpx
 from enum import Enum
 import PTN
 from library.torbox import TORBOX_API_KEY
 from library.app import SCAN_METADATA
 from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear
+from library.metadata import search as search_tmdb
 from functions.databaseFunctions import insertData
 import os
 import logging
@@ -133,64 +134,58 @@ def getUserDownloads(type: DownloadType):
     return files, True, f"{type.value.capitalize()} fetched successfully."
 
 def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str, hash: str, item_name: str):
+    # Season-pack folders supply title/year when episode filenames omit them.
+    parent = PTN.parse(item_name or "")
+    parsed = {**parent, **title_data}
+    season, episode = parsed.get("season"), parsed.get("episode")
+    is_series = season is not None or episode is not None
+    title = cleanTitle(query or parsed.get("title") or item_name or "Unknown")
+    year = cleanYear(parsed.get("year"))
     base_metadata = {
-        "metadata_title": cleanTitle(query),
+        "metadata_title": title,
         "metadata_link": None,
-        "metadata_mediatype": "movie",
+        "metadata_mediatype": "series" if is_series else "movie",
         "metadata_image": None,
         "metadata_backdrop": None,
-        "metadata_years": None,
-        "metadata_season": None,
-        "metadata_episode": None,
+        "metadata_years": year,
+        "metadata_season": season,
+        "metadata_episode": episode,
         "metadata_filename": file_name,
-        "metadata_rootfoldername": title_data.get("item_name", None),
+        "metadata_rootfoldername": item_name or title,
     }
+    if is_series:
+        base_metadata["metadata_foldername"] = constructSeriesTitle(
+            season=season if season is not None else 1, folder=True)
     if not SCAN_METADATA:
-        base_metadata["metadata_rootfoldername"] = item_name
         return base_metadata, False, "Metadata scanning is disabled."
-    extension = os.path.splitext(file_name)[-1]
     try:
-        response = requestWrapper(search_api_http_client, "GET", f"/meta/search/{full_title}", params={"type": "file"})
-    except Exception as e:
-        logging.error(f"Error searching metadata: {e}")
-        return base_metadata, False, f"Error searching metadata: {e}. Searching for {query}, item hash: {hash}"
-    if response.status_code != 200:
-        logging.error(f"Error searching metadata: {response.status_code}. {response.text}")
-        return base_metadata, False, f"Error searching metadata. {response.status_code}. Searching for {query}, item hash: {hash}"
-    try:
-        data = response.json().get("data", [])[0]
-
-        title = cleanTitle(data.get("title"))
-        base_metadata["metadata_title"] = title
-        base_metadata["metadata_years"] = cleanYear(title_data.get("year", None) or data.get("releaseYears", None))
-
-        if data.get("type") == "anime" or data.get("type") == "series":
-            series_season_episode = constructSeriesTitle(season=title_data.get("season", None), episode=title_data.get("episode", None))
-            file_name = f"{title} {series_season_episode}{extension}"
-            base_metadata["metadata_foldername"] = constructSeriesTitle(season=title_data.get("season", 1), folder=True)
-            base_metadata["metadata_season"] = title_data.get("season", 1)
-            base_metadata["metadata_episode"] = title_data.get("episode")
-        elif data.get("type") == "movie":
-            file_name = f"{title} ({base_metadata['metadata_years']}){extension}"
+        data = search_tmdb(title, year, is_series)
+        if not data:
+            logging.warning("No TMDB match for %s; keeping filename metadata.", title)
+            return base_metadata, False, "No TMDB match."
+        title = cleanTitle(data["title"])
+        year = data["year"]
+        root = f"{title} ({year})" if year else title
+        extension = os.path.splitext(file_name)[-1]
+        if is_series:
+            numbering = constructSeriesTitle(season=season, episode=episode)
+            filename = f"{title} {numbering}{extension}" if numbering else f"{title}{extension}"
         else:
-            return base_metadata, False, f"No metadata found. Searching for {query}, item hash: {hash}"
-            
-        base_metadata["metadata_filename"] = file_name
-        base_metadata["metadata_mediatype"] = data.get("type")
-        base_metadata["metadata_link"] = data.get("link")
-        base_metadata["metadata_image"] = data.get("image")
-        base_metadata["metadata_backdrop"] = data.get("backdrop")
-        base_metadata["metadata_rootfoldername"] = f"{title} ({base_metadata['metadata_years']})"
-
-        return base_metadata, True, f"Metadata found. Searching for {query}, item hash: {hash}"
-    except IndexError:
-        return base_metadata, False, f"No metadata found. Searching for {query}, item hash: {hash}"
-    except httpx.TimeoutException:
-        return base_metadata, False, f"Timeout searching metadata. Searching for {query}, item hash: {hash}"
-    except Exception as e:
-        logging.error(f"Error searching metadata: {e}")
-        logging.error(f"Error searching metadata: {traceback.format_exc()}")
-        return base_metadata, False, f"Error searching metadata: {e}. Searching for {query}, item hash: {hash}"
+            filename = f"{root}{extension}"
+        base_metadata.update({
+            "metadata_title": title,
+            "metadata_years": year,
+            "metadata_filename": filename,
+            "metadata_rootfoldername": root,
+            "metadata_link": data["link"],
+            "metadata_image": data["image"],
+            "metadata_backdrop": data["backdrop"],
+        })
+        return base_metadata, True, "TMDB metadata found."
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+        # Never log request headers or token-bearing exception details.
+        logging.warning("TMDB lookup failed for %s; check token, connectivity and response. Keeping filename metadata.", title)
+        return base_metadata, False, "TMDB lookup failed."
 
 def getDownloadLink(url: str):
     response = requestWrapper(general_http_client, "GET", url)

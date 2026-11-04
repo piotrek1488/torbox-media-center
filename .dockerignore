@@ -4,3 +4,14 @@
 CHANGELOG.md
 *.md
 *.yaml
+# Local credentials and generated development data must never enter the image.
+.env
+.env.*
+.venv
+.git
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+torbox
+*.json

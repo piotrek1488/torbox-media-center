@@ -1,3 +1,17 @@
+## TMDB metadata in this fork
+
+Use the repository's `docker-compose.yaml` and your local `.env`:
+
+```dotenv
+TORBOX_API_KEY=your_torbox_key
+ENABLE_METADATA=true
+TMDB_API_KEY=your_tmdb_v3_api_key
+METADATA_LANGUAGE=pl-PL
+RAW_MODE=false
+```
+
+Run `docker compose up -d --build`. Compose builds this checkout; the upstream images in the historical examples below do not include the TMDB integration. See [local configuration](docs/development-pl.md) for details and limitations.
+
 ## Converting Commands to Docker Compose
 Since Docker compose isn't as popular as Docker run commands, we only supplied the most common one [here](https://github.com/TorBox-App/torbox-media-center/blob/main/docker-compose.yaml), but since there are so many different iterations of the Docker run command, you can convert any Docker run command to a Docker compose file using [Composerize](https://www.composerize.com/), which is a pretty neat tool.
 

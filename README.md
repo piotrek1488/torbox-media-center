@@ -9,7 +9,7 @@ The TorBox Media Center allows you to easily mount your TorBox media in a no-fri
 
 ### ✨ Features
 
-- Organizing your media automatically, using the [TorBox Metadata Search API](https://www.postman.com/wamy-dev/torbox/request/ubj7d6v/get-metadata-by-query)
+- Organizing your media automatically, using the [TMDB API](https://developer.themoviedb.org/docs)
 - Mounting your media simply and safely
 - Making sure your media is easily discoverable by media players
 - Fast and effecient.
@@ -92,7 +92,11 @@ To run this project you will need to add the following environment variables to 
 
 `MOUNT_REFRESH_TIME` How fast you would like your mount to look for new files. Must be either `slowest` for every 24 hours, `very_slow` for every 12 hours, `slow` for every 6 hours, `normal` for every 3 hours, `fast` for every 2 hours or `ultra_fast` for every 1 hour. The default is `normal` and is optional.
 
-`ENABLE_METADATA` This option allows you to enable scanning the metadata of your files. If this is enabled, TorBox will __attempt__ to find the correct metadata for your files in your TorBox account. This isn't perfect, so use with caution. If this option is `false` it skips scanning and places all of your video files in the `movies` folder. If it is enabled, TorBox will scan, and attempt to place your files into either the `movies` or `series` folders. Please also keep in mind that you will be subject to rate limiting of our search endpoint when using the metadata option. Seeing 429 errors will be common. Most of the time it is best to keep this option disabled unless you video player absolutely requires it. Also keep in mind, this unlocks the `instant` option, which can allow you to refresh every 6 minutes.
+`ENABLE_METADATA` Set to `true` to match movies and TV series using TMDB. Set `TMDB_API_KEY` in `.env` or the container environment. Titles, premiere years and artwork come from TMDB; season and episode numbers come from filenames (e.g. `S02E03`). Unmatched files and provider failures keep filename-based metadata. `RAW_MODE=true` disables metadata lookup.
+
+`TMDB_API_KEY` Your TMDB API key (v3 auth), available in [TMDB account API settings](https://www.themoviedb.org/settings/api). This is separate from the TorBox key and required only when metadata is enabled.
+
+`METADATA_LANGUAGE` TMDB result language, default `pl-PL`. Use `en-US` for English.
 
 `RAW_MODE` This option determines whether you want the raw file structure (similar to what you would see with webdav). Setting this to `true` will present the files in the original structure. If this is enabled, the `ENABLE_METADATA` option is disabled.
 

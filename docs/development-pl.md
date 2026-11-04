@@ -21,4 +21,26 @@ Domyślne ustawienia nowego `.env`: STRM, metadane wyłączone, katalog `./torbo
 
 Test `smoke-dev.py` działa bez prawdziwego klucza i bez żądań sieciowych. Sprawdza przetwarzanie przykładowego medium, zapis TinyDB, treść STRM i usuwanie nieaktualnych plików, w katalogu tymczasowym. Nie potwierdza synchronizacji z API ani odtwarzania. Po lokalnym uruchomieniu sprawdź pobranie list TorBox i wygenerowane pliki.
 
-W środowisku chmurowym używaj istniejącego checkoutu, bez tworzenia worktree. Jeśli katalog domowy jest tylko do odczytu, ustaw `UV_CACHE_DIR=/workspace/.cache/uv` przed instalacją. Proces aplikacji trzeba uruchomić ponownie w nowej sesji. Do pracy offline klucz nie jest potrzebny; synchronizacja wymaga dostępu HTTPS do `api.torbox.app`, a opcjonalne metadane do `search-api.torbox.app`.
+W środowisku chmurowym używaj istniejącego checkoutu, bez tworzenia worktree. Jeśli katalog domowy jest tylko do odczytu, ustaw `UV_CACHE_DIR=/workspace/.cache/uv` przed instalacją. Proces aplikacji trzeba uruchomić ponownie w nowej sesji. Do pracy offline klucz nie jest potrzebny; synchronizacja wymaga dostępu HTTPS do `api.torbox.app`, a opcjonalne metadane do `api.themoviedb.org`.
+
+
+## Metadane TMDB
+
+W istniejącym `.env` dopisz (skrypt nie nadpisuje tego pliku):
+
+```dotenv
+ENABLE_METADATA=true
+TMDB_API_KEY=twoj_lokalny_klucz_tmdb
+METADATA_LANGUAGE=pl-PL
+RAW_MODE=false
+```
+
+Użyj klucza **API Key (v3 auth)** z https://www.themoviedb.org/settings/api, nie tokenu „API Read Access Token”. Klucz TorBox pozostaje w `TORBOX_API_KEY`. Nie publikuj żadnego z kluczy.
+
+TMDB dostarcza tytuł, rok premiery i adresy grafik. Sezon/odcinek pochodzi z nazwy pliku, np. `Dark.S02E03.mkv`. Wyszukiwanie rozróżnia filmy i seriale; dla filmu uwzględnia rok z nazwy, a dla serialu używa roku premiery całej serii. Brak dopasowania, timeout lub błąd API zachowuje metadane z nazwy pliku. Wyniki są przechowywane w ograniczonym cache w pamięci procesu. Dopasowanie po nazwie nie gwarantuje poprawności dla niejednoznacznych tytułów.
+
+Docker Compose odczytuje te same zmienne z `.env`. Uruchom `docker compose up -d --build`, aby zbudować lokalny kod z integracją TMDB. Dotychczasowy publiczny obraz upstream nie zawiera tej zmiany. Pliki STRM pojawią się w `./torbox`. Podgląd logów: `docker compose logs -f` (obecna aplikacja wypisuje klucz TorBox; nie udostępniaj logów).
+
+Testy bez prawdziwych kluczy: `.venv/bin/python -m unittest discover -s tests -v`. Nie potwierdzają autoryzacji prawdziwego konta TMDB.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.

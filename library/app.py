@@ -27,8 +27,8 @@ if MOUNT_REFRESH_TIME == "instant":
 if SCAN_METADATA and RAW_MODE:
     SCAN_METADATA = False
     print("!!! RAW_MODE IS NOT COMPATIBLE WITH METADATA SCANNING. Disabling metadata scanning. !!!")
-else:
-    print("!!! Metadata scanning is enabled. This may slow down the processing of files. !!!")
+elif SCAN_METADATA:
+    print("!!! TMDB metadata scanning is enabled. This may slow down the processing of files. !!!")
 
 if MOUNT_REFRESH_TIME == "instant" and SCAN_METADATA:
     print("!!! Using instant mount refresh time with metadata scanning may lead to excessive API calls. Falling back to 'fast' refresh time. !!!")
