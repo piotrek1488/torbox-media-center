@@ -167,6 +167,8 @@ services:
 
 ## 🏠 Running Locally (no Docker)
 
+Polska instrukcja konfiguracji, skrypty deweloperskie i test offline: [Lokalne środowisko deweloperskie](docs/development-pl.md).
+
 1. Make sure you have Python installed. Anything from v3.6 should be okay.
 2. Download or git clone this repository.
 
