@@ -69,7 +69,7 @@ def cleanYear(year: str | int):
         return None
 
 
-def parseMediaName(file_name, parent_name=""):
+def parseMediaName(file_name, parent_name="", file_path=""):
     """Repair PTN's empty episode lists and parse absolute anime numbering."""
     import PTN
     parent = PTN.parse(parent_name or "")
@@ -84,6 +84,24 @@ def parseMediaName(file_name, parent_name=""):
         parsed["title"] = match[1].strip()
         parsed["episode"] = int(match[2])
         parsed["absolute_episode"] = True
+    # Episode-only names need a series title from the containing folder/download.
+    leading_episode = re.match(
+        r"^(?:(?:episode|ep|odcinek|odc)\.?\s*(\d{1,4})\b|S(\d{1,2})E(\d{1,4})\b|(\d{1,4})\s*[-.])",
+        name, re.IGNORECASE)
+    if leading_episode:
+        number = leading_episode[1] or leading_episode[3] or leading_episode[4]
+        parsed["episode"] = int(number)
+        if leading_episode[2] is not None:
+            parsed["season"] = int(leading_episode[2])
+        else:
+            parsed["absolute_episode"] = True
+        folders = list(reversed(re.split(r"[/\\]", file_path or "")[:-1]))
+        for folder in [*folders, parent_name]:
+            candidate = PTN.parse(folder or "").get("title", "").strip()
+            if not candidate or re.fullmatch(r"(?:season|sezon|s)\s*\d+|[0-9a-f]{16,}|(?:1080|720|2160)p|episodes?|odcinki|anime|movies|series", candidate, re.IGNORECASE):
+                continue
+            parsed["title"] = candidate
+            break
     if re.search(r"\b(?:movie|film)\s*#?\s*\d+\b", name, re.IGNORECASE):
         parsed["media_type"] = "movie"
         # A film in a season-pack folder must not inherit episode numbering.

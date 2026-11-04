@@ -59,7 +59,7 @@ def process_file(item, file, type):
         "download_link": f"https://api.torbox.app/v1/api/{type.value}/requestdl?token={TORBOX_API_KEY}&{IDType[type.value].value}={item.get('id')}&file_id={file.get('id')}&redirect=true",
         "extension": os.path.splitext(file.get("short_name"))[-1],              
     }
-    title_data = parseMediaName(file.get("short_name"), item.get("name"))
+    title_data = parseMediaName(file.get("short_name"), item.get("name"), file.get("name"))
 
     if item.get("name") == item.get("hash"):
         item["name"] = title_data.get("title", file.get("short_name"))

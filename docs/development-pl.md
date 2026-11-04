@@ -77,3 +77,5 @@ Zakres lat emisji w nazwie (np. `Yattodetaman.1981-1982.S01E01...`) jest rozpozn
 ```
 
 Powtarzające się ostrzeżenia o braku dopasowania tego samego tytułu/roku/typu są ograniczone do jednego w procesie (pamięć obejmuje ostatnie 512 takich kombinacji). Samo ograniczenie logów nie oznacza udanego dopasowania.
+
+Nazwy zawierające wyłącznie numer i tytuł odcinka (`Episode 121 ...`, `S01E121 - ...`, `121 - ...`, `Odcinek 121 ...`) pobierają nazwę serialu z najbliższego nazwanego folderu w pełnej ścieżce pliku TorBox, pomijając foldery sezonów. Gdy ścieżka nie dostarcza nazwy, używana jest nazwa pobrania. Na przykład `Dragon Ball Kai/Season 1/Episode 121 ...mkv` jest wyszukiwany jako `Dragon Ball Kai`, z zachowaniem numeru absolutnego 121. Nazwa serialu zawarta wprost w nazwie pliku nadal ma pierwszeństwo. Same imiona postaci lub opis fabuły odcinka nie służą do zgadywania serialu. Ten mechanizm nie mapuje numerów absolutnych na sezony providera.
