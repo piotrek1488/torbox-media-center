@@ -102,3 +102,6 @@ Raport odróżnia testowane działanie parsera od rzeczywistego dostępu do API.
 
 
 Zapytania mają dodatkowy wariant z kropkami i podkreśleniami zastąpionymi spacjami. Na przykład parser może pozostawić `Zootopia.2.` po odcięciu roku i jakości; provider jest wtedy odpytywany także o `Zootopia 2`, nadal z rokiem 2025 i typem filmu. Oryginalny zapis jest zachowany jako pierwszy wariant dla tytułów, w których interpunkcja jest znacząca. Testy obu zgłoszonych wydań DEVIL-TORRENTS.PL i XTORRENTY.ORG sprawdzają cały przebieg od parsowania nazwy do dopasowania kontrolowanej odpowiedzi TMDB. Nie potwierdzają dostępu do prawdziwego konta API.
+
+
+Format `tytuł lokalny ROK tytuł oryginalny`, np. `To 2017 IT`, generuje dodatkowe zapytania dla obu tytułów. Rok pozostaje filtrem identyfikującym film. Jeśli znany rok jest sprzeczny z liczbą w tytule, podział nie jest stosowany (np. `Blade Runner 2049`, rok wydania 2017). Tytuły do trzech znaków wymagają dokładnej zgodności po normalizacji, aby `To` nie zostało dopasowane do przypadkowej podobnej nazwy. Mechanizm nie wymaga aliasu konkretnego filmu.

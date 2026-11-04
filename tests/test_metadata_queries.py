@@ -10,6 +10,30 @@ from library import metadata
 
 
 class QueryTests(unittest.TestCase):
+    def test_bilingual_title_with_middle_year(self):
+        self.assertEqual(metadata.query_variants('To 2017 IT', False, 2017), ['To 2017 IT', 'To', 'IT'])
+        self.assertIsNone(metadata.translated_title_parts('Blade Runner 2049 Final Cut', 2017))
+        self.assertIsNone(metadata.translated_title_parts('2001 A Space Odyssey'))
+        self.assertIsNone(metadata.translated_title_parts('Class of 1984'))
+        self.assertEqual(metadata.title_similarity('To', 'Tor'), 0)
+        self.assertEqual(metadata.title_similarity('IT', 'IT 2'), 0)
+
+    def test_bilingual_query_keeps_year_and_matches_alternate_title(self):
+        client = httpx.Client
+        calls = []
+        def handler(request):
+            query = request.url.params['query']
+            calls.append(query)
+            self.assertEqual(request.url.params['primary_release_year'], '2017')
+            results = [{'id': 346364, 'title': 'To', 'original_title': 'It', 'release_date': '2017-09-06'}] if query == 'IT' else []
+            return httpx.Response(200, json={'results': results})
+        metadata.lookup.cache_clear()
+        with patch.dict(os.environ, {'METADATA_PROVIDERS': 'tmdb', 'TMDB_API_KEY': 'test'}), patch.object(metadata.httpx, 'Client', side_effect=lambda **kwargs: client(**kwargs, transport=httpx.MockTransport(handler))):
+            result = metadata.search('To 2017 IT', None, False)
+        self.assertEqual(result['title'], 'To')
+        self.assertEqual(result['year'], 2017)
+        self.assertEqual(calls, ['To 2017 IT', 'To', 'IT'])
+
     def test_actual_yattodetaman_filename(self):
         from functions.mediaFunctions import parseMediaName
         result = parseMediaName('Yattodetaman.1981-1982.S01E01.PL.1080p.WEB-DL.H264-SLH.mkv')

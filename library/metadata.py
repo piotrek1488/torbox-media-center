@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import unicodedata
+from datetime import date
 
 import httpx
 
@@ -62,11 +63,32 @@ def title_similarity(query, title):
     wanted, found = numbered_movie(query), numbered_movie(title)
     if wanted and found:
         return 1.0 if wanted == found else 0.0
-    return SequenceMatcher(None, normalized(query), normalized(title)).ratio()
+    query_key, title_key = normalized(query), normalized(title)
+    if len(query_key) <= 3:
+        return 1.0 if query_key == title_key else 0.0
+    return SequenceMatcher(None, query_key, title_key).ratio()
+
+
+def translated_title_parts(query, year=None):
+    """Split title / release year / alternate title while retaining year identity."""
+    spaced = re.sub(r'[._]+', ' ', query)
+    match = re.fullmatch(r'(.+?)\s+[([]?((?:19|20)\d{2})[)\]]?\s+(.+)', spaced.strip())
+    if not match:
+        return None
+    found_year = int(match[2])
+    if found_year > date.today().year + 1 or (year and year != found_year):
+        return None
+    left, right = match[1].strip(), match[3].strip()
+    if not any(c.isalpha() for c in left) or not any(c.isalpha() for c in right):
+        return None
+    return left, found_year, right
 
 
 def query_variants(query, is_series, year=None):
     variants = [query]
+    translation = translated_title_parts(query, year)
+    if translation:
+        variants.extend((translation[0], translation[2]))
     if not is_series:
         match = re.match(r'^(.*?\s+(?:movie|film)\s*#?\s*\d+)\b', query, re.IGNORECASE)
         if match and match[1].strip() != query:
@@ -234,6 +256,9 @@ def search_providers(query, year, is_series):
     import logging
     import time
     language = os.getenv('METADATA_LANGUAGE', 'pl-PL')
+    translation = translated_title_parts(query, year)
+    if translation and not year and not is_series:
+        year = translation[1]
     for variant in query_variants(query, is_series, year):
         for provider in os.getenv('METADATA_PROVIDERS', 'tmdb,tvdb,kitsu').split(','):
             provider = provider.strip().lower()
