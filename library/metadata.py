@@ -75,6 +75,13 @@ def query_variants(query, is_series, year=None):
         without_year = re.sub(rf'\s+[([]?{year}[)\]]?$', '', query).strip()
         if without_year and without_year != query:
             variants.append(without_year)
+    # Torrent parsers can leave dotted/underscored release titles ("Title.2.").
+    # Keep the literal title as a candidate for names where punctuation matters.
+    for variant in list(variants):
+        spaced = re.sub(r'[._]+', ' ', variant)
+        spaced = re.sub(r'\s+', ' ', spaced).strip()
+        if spaced and spaced != variant:
+            variants.append(spaced)
     for variant in list(variants):
         expanded = re.sub(r'\bcz\.?\s*(\d+)\b', r'część \1', variant, flags=re.IGNORECASE)
         if expanded != variant:

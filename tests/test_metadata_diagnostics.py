@@ -27,6 +27,35 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(events[-1]['status'], 'matched')
         self.assertNotIn('secret-fixture', json.dumps(events))
 
+    def test_real_zootopia_release_names_query_normalization(self):
+        from functions.mediaFunctions import parseMediaName
+        names = [
+            '[DEVIL-TORRENTS.PL] Zootopia.2.2025.PLDUB.MULTi.2160p.iT.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265-P2P',
+            '[XTORRENTY.ORG] Zootopia.2.2025.MULTi.2160p.AMZN.WEB-DL.HDR.H.265.DD5.1-RX',
+        ]
+        for name in names:
+            with self.subTest(name=name):
+                metadata.lookup.cache_clear()
+                parsed = parseMediaName(name + '.mkv', name)
+                candidate = parsed['metadata_candidates'][0]
+                self.assertEqual(candidate['year'], 2025)
+                self.assertIsNone(parsed.get('season'))
+                queries = []
+                def handler(request):
+                    query = request.url.params['query']
+                    queries.append(query)
+                    self.assertEqual(request.url.params['primary_release_year'], '2025')
+                    results = [{'id': 1084242, 'title': 'Zwierzogród 2', 'original_title': 'Zootopia 2', 'release_date': '2025-11-26'}] if query == 'Zootopia 2' else []
+                    return httpx.Response(200, json={'results': results})
+                with patch.dict(os.environ, {'METADATA_PROVIDERS': 'tmdb', 'TMDB_API_KEY': 'secret-fixture'}), self.client(handler):
+                    result = metadata.search(candidate['title'], candidate['year'], False)
+                self.assertEqual(result['title'], 'Zwierzogród 2')
+                self.assertIn('Zootopia 2', queries)
+
+    def test_generic_release_separators_keep_literal_title(self):
+        self.assertEqual(metadata.query_variants('Some.Other_Title.', False), ['Some.Other_Title.', 'Some Other Title'])
+        self.assertEqual(metadata.query_variants('Dr. Strangelove', False)[0], 'Dr. Strangelove')
+
     def test_missing_key_distinguished_from_zero_results(self):
         with patch.dict(os.environ, {'METADATA_PROVIDERS': 'tmdb', 'TMDB_API_KEY': ''}), metadata.capture_diagnostics() as events:
             self.assertIsNone(metadata.search('Zootopia 2', None, False))
