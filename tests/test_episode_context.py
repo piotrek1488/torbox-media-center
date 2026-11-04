@@ -8,6 +8,22 @@ from functions import torboxFunctions as torbox
 
 
 class EpisodeContextTests(unittest.TestCase):
+    def test_actual_complete_series_path(self):
+        parent = 'Dragon Ball Z Kai The Complete Series (2009–2015)'
+        name = 'Episode 121 I am the Strongest! The Clash of Goku vs. Vegeta.mkv'
+        parsed = parseMediaName(name, parent, parent + '/' + name)
+        self.assertEqual(parsed['title'], 'Dragon Ball Z Kai')
+        self.assertEqual(parsed['year'], 2009)
+        self.assertEqual(parsed['episode'], 121)
+        data = {'title': 'Dragon Ball Z Kai', 'year': 2009, 'link': None, 'image': None, 'backdrop': None}
+        with patch.object(torbox, 'SCAN_METADATA', True), patch.object(torbox, 'search_metadata', return_value=data) as search, patch.object(torbox, 'insertData'):
+            result = torbox.process_file(
+                {'id': 1, 'name': parent, 'hash': 'hash'},
+                {'id': 2, 'name': parent + '/' + name, 'short_name': name, 'mimetype': 'video/x-matroska', 'size': 100},
+                torbox.DownloadType.torrent)
+        self.assertEqual(search.call_args.args, ('Dragon Ball Z Kai', 2009, True))
+        self.assertEqual(result['metadata_filename'], 'Dragon Ball Z Kai E121.mkv')
+
     def test_episode_prefix_uses_series_folder(self):
         name = 'Episode 121 I am the Strongest! The Clash of Goku vs. Vegeta.mkv'
         result = parseMediaName(name, 'Anime collection', f'Dragon Ball Kai/Season 1/{name}')

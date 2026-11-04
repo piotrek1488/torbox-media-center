@@ -97,10 +97,16 @@ def parseMediaName(file_name, parent_name="", file_path=""):
             parsed["absolute_episode"] = True
         folders = list(reversed(re.split(r"[/\\]", file_path or "")[:-1]))
         for folder in [*folders, parent_name]:
-            candidate = PTN.parse(folder or "").get("title", "").strip()
+            context = PTN.parse(folder or "")
+            candidate = context.get("title", "").strip()
             if not candidate or re.fullmatch(r"(?:season|sezon|s)\s*\d+|[0-9a-f]{16,}|(?:1080|720|2160)p|episodes?|odcinki|anime|movies|series", candidate, re.IGNORECASE):
                 continue
             parsed["title"] = candidate
+            if context.get("year"):
+                parsed["year"] = context["year"]
+            context_years = re.search(r'(?<!\d)((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})(?!\d)', folder)
+            if context_years and int(context_years[1]) <= int(context_years[2]):
+                parsed["year"] = int(context_years[1])
             break
     if re.search(r"\b(?:movie|film)\s*#?\s*\d+\b", name, re.IGNORECASE):
         parsed["media_type"] = "movie"
