@@ -87,3 +87,15 @@ Resolver nie zawiera listy nazw seriali. Dla każdego pliku przygotowuje maksyma
 Jawne oznaczenie serialu (`Season 2`, `S02`, `The Complete Series`, numer odcinka) pozwala rozpoznać serię również wtedy, gdy pliki mają wyłącznie tytuły odcinków. W takim przypadku nazwa folderu/paczki ma pierwszeństwo przed opisem odcinka. Nazwa serialu zawarta wprost w nazwie pliku pozostaje pierwszym kandydatem. Przy braku numeru odcinka zachowywana jest oryginalna nazwa pliku — numeru nie zgaduje się, a różne odcinki nie stają się jednym plikiem `S01.strm`.
 
 W rekordzie TinyDB pola `metadata_query` i `metadata_query_source` wskazują zapytanie, które dało dopasowanie, i jego źródło (`filename`, `folder`, `download`). Odpowiedzi providerów muszą nadal spełniać wymagania typu, roku dla filmów i podobieństwa tytułu. Algorytm wybiera pierwsze dopasowanie w określonej kolejności, a nie globalnie najwyższą ocenę wszystkich providerów. Nie jest to gwarancja rozpoznania niejednoznacznych tytułów. Bez nazwy serii lub informacji o sezonie/odcinku nie da się wiarygodnie wywnioskować jej z samej fabuły. Jawny plik aliasów pozostaje opcjonalną pomocą dla alternatywnych tłumaczeń; zwykłe rozpoznawanie seriali go nie wymaga.
+
+## Diagnostyka niedopasowanego tytułu
+
+```bash
+.venv/bin/python scripts/diagnose-metadata.py 'Zootopia.2.2025.1080p.mkv' --download 'Nazwa pobrania' --path 'Folder/Zootopia.2.2025.1080p.mkv'
+```
+
+Użyj rzeczywistej nazwy pliku. Polecenie ładuje lokalny `.env`, sprawdza metadane i wypisuje JSON. Nie uruchamia TorBox, nie czyści katalogów i nie zapisuje bazy. `--offline` ogranicza je do sprawdzenia parsera i obecności konfiguracji.
+
+Raport pokazuje obecność kluczy jako true/false (bez wartości), kandydatów, typ filmu/serialu i zdarzenia providerów: `skipped_missing_key`, `error` ze statusem HTTP, `no_match`, `matched`. Dla TMDB pokazuje liczbę zwróconych wyników oraz ich tytuły, lata i ocenę dopasowania. Nie loguje URL żądania ani nagłówków, które mogą zawierać klucze. Brak klucza jest teraz także sygnalizowany w zwykłych logach raz na providera. TVDB jest opcjonalny — usuń go z `METADATA_PROVIDERS`, jeśli nie chcesz z niego korzystać.
+
+Raport odróżnia testowane działanie parsera od rzeczywistego dostępu do API. Jeżeli dla poprawnego tytułu TMDB zostaje pominięte, sprawdź nazwę `TMDB_API_KEY` i przekazanie `.env` do uruchomionego procesu/kontenera. Jeżeli wystąpi HTTP 401/429 lub błąd sieci, komunikat zawiera typ błędu bez danych uwierzytelniających. Sam wynik `no_match` nie dowodzi braku filmu w katalogu providera.

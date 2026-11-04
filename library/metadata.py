@@ -1,4 +1,6 @@
 """Ordered TMDB, TVDB and Kitsu lookups with separate provider credentials."""
+from contextvars import ContextVar
+from contextlib import contextmanager
 from difflib import SequenceMatcher
 from functools import lru_cache
 import os
@@ -8,6 +10,31 @@ import re
 import unicodedata
 
 import httpx
+
+
+_diagnostics = ContextVar('metadata_diagnostics', default=None)
+
+
+@contextmanager
+def capture_diagnostics():
+    events = []
+    token = _diagnostics.set(events)
+    try:
+        yield events
+    finally:
+        _diagnostics.reset(token)
+
+
+def record(provider, status, **details):
+    events = _diagnostics.get()
+    if events is not None:
+        events.append({'provider': provider, 'status': status, **details})
+
+
+@lru_cache(maxsize=16)
+def warn_missing_key(provider, variable):
+    import logging
+    logging.warning('Metadata provider %s skipped: %s is missing. Set it in .env/container environment.', provider, variable)
 
 
 def normalized(title):
@@ -75,6 +102,7 @@ def lookup(query, year, is_series, api_key, language):
         if not isinstance(payload, dict) or not isinstance(payload.get('results'), list):
             raise ValueError('Invalid TMDB search response.')
         results = payload['results']
+    record('tmdb', 'response', query=query, year=year, type=kind, results=len(results))
     candidates = []
     for result in results:
         if not isinstance(result, dict) or not result.get('id'):
@@ -87,6 +115,7 @@ def lookup(query, year, is_series, api_key, language):
                     for name in (title, original))
         date = result.get('first_air_date' if is_series else 'release_date') or ''
         result_year = int(date[:4]) if date[:4].isdigit() else None
+        record('tmdb', 'candidate', title=title, original_title=original, year=result_year, score=round(score, 3), accepted=score >= 0.7 and (not year or is_series or result_year == year))
         if year and not is_series and result_year != year:
             continue
         if score >= 0.7:
@@ -205,11 +234,15 @@ def search_providers(query, year, is_series):
                 if provider == 'tmdb':
                     key = os.getenv('TMDB_API_KEY', '').strip()
                     if not key:
+                        record(provider, 'skipped_missing_key', variable='TMDB_API_KEY')
+                        warn_missing_key(provider, 'TMDB_API_KEY')
                         continue
                     result = lookup(variant, year, is_series, key, language)
                 elif provider == 'tvdb':
                     key = os.getenv('TVDB_API_KEY', '').strip()
                     if not key:
+                        record(provider, 'skipped_missing_key', variable='TVDB_API_KEY')
+                        warn_missing_key(provider, 'TVDB_API_KEY')
                         continue
                     result = lookup_tvdb(variant, year, is_series, key,
                                          os.getenv('TVDB_PIN', '').strip(), language, int(time.time() // 86400))
@@ -218,10 +251,13 @@ def search_providers(query, year, is_series):
                 else:
                     logging.warning('Unknown metadata provider: %s', provider)
                     continue
+                record(provider, 'matched' if result else 'no_match', query=variant, year=year, type='series' if is_series else 'movie')
                 if result:
                     return {**result, 'provider': provider}
-            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-                logging.warning('Metadata provider %s failed; trying next provider.', provider)
+            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError) as error:
+                status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
+                record(provider, 'error', http_status=status, error_type=type(error).__name__)
+                logging.warning('Metadata provider %s failed (%s%s); trying next provider.', provider, type(error).__name__, f', HTTP {status}' if status else '')
     return None
 
 
