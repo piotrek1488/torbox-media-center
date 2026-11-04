@@ -79,11 +79,20 @@ def parseMediaName(file_name, parent_name="", file_path=""):
     # Release-group tags and technical brackets must not become the search title.
     name = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", file_name)
     name = re.sub(r"\.[^.]+$", "", name).strip()
-    match = re.fullmatch(r"(.+?)\s+-\s+(\d{1,4})(?:v\d+)?\s*", name, re.IGNORECASE)
-    if match and not file_data.get("episode"):
+    # PTN can remove quality tags but leave separators after an absolute episode.
+    # Try both the cleaned filename and PTN's title so quality suffixes need no allowlist.
+    for episode_title in (name, file_data.get("title", "")):
+        match = re.fullmatch(r"(.+?)\s+[-–—]\s*(\d{1,4})(?:v\d+)?[.\s]*", episode_title, re.IGNORECASE)
+        if not match:
+            continue
+        number = int(match[2])
+        if number >= 1900 and number == parsed.get("year"):
+            continue
         parsed["title"] = match[1].strip()
-        parsed["episode"] = int(match[2])
-        parsed["absolute_episode"] = True
+        if not file_data.get("episode"):
+            parsed["episode"] = number
+            parsed["absolute_episode"] = True
+        break
     # Episode-only names need a series title from the containing folder/download.
     leading_episode = re.match(
         r"^(?:(?:episode|ep|odcinek|odc)\.?\s*(\d{1,4})\b|S(\d{1,2})E(\d{1,4})\b|(\d{1,4})\s*[-.])",

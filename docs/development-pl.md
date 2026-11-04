@@ -105,3 +105,5 @@ Zapytania mają dodatkowy wariant z kropkami i podkreśleniami zastąpionymi spa
 
 
 Format `tytuł lokalny ROK tytuł oryginalny`, np. `To 2017 IT`, generuje dodatkowe zapytania dla obu tytułów. Rok pozostaje filtrem identyfikującym film. Jeśli znany rok jest sprzeczny z liczbą w tytule, podział nie jest stosowany (np. `Blade Runner 2049`, rok wydania 2017). Tytuły do trzech znaków wymagają dokładnej zgodności po normalizacji, aby `To` nie zostało dopasowane do przypadkowej podobnej nazwy. Mechanizm nie wymaga aliasu konkretnego filmu.
+
+Numeracja absolutna jest rozpoznawana również przy końcowych kropkach i oznaczeniach jakości, np. `Naruto - 137. [1080p].mkv`. Parser sprawdza oczyszczoną nazwę oraz tytuł zwrócony przez PTN, dzięki czemu odcięcie jakości nie wymaga utrzymywania osobnej listy jej oznaczeń. Zapytaniem jest `Naruto`, a numer 137 pozostaje numerem odcinka. Reguła nie zależy od nazwy serii; nie obcina ułamkowego numeru `137.5` do `137` ani rozpoznanego roku filmu do numeru odcinka.
