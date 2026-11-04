@@ -1,11 +1,10 @@
 from library.http import api_http_client, general_http_client, requestWrapper
 import httpx
 from enum import Enum
-import PTN
 from library.torbox import TORBOX_API_KEY
 from library.app import SCAN_METADATA
-from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear
-from library.metadata import search as search_tmdb
+from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear, parseMediaName
+from library.metadata import search as search_metadata
 from functions.databaseFunctions import insertData
 import os
 import logging
@@ -50,7 +49,7 @@ def process_file(item, file, type):
         "download_link": f"https://api.torbox.app/v1/api/{type.value}/requestdl?token={TORBOX_API_KEY}&{IDType[type.value].value}={item.get('id')}&file_id={file.get('id')}&redirect=true",
         "extension": os.path.splitext(file.get("short_name"))[-1],              
     }
-    title_data = PTN.parse(file.get("short_name"))
+    title_data = parseMediaName(file.get("short_name"), item.get("name"))
 
     if item.get("name") == item.get("hash"):
         item["name"] = title_data.get("title", file.get("short_name"))
@@ -135,11 +134,11 @@ def getUserDownloads(type: DownloadType):
 
 def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str, hash: str, item_name: str):
     # Season-pack folders supply title/year when episode filenames omit them.
-    parent = PTN.parse(item_name or "")
-    parsed = {**parent, **title_data}
+    parsed = {**parseMediaName(file_name, item_name),
+              **{k: v for k, v in title_data.items() if v is not None and v != []}}
     season, episode = parsed.get("season"), parsed.get("episode")
     is_series = season is not None or episode is not None
-    title = cleanTitle(query or parsed.get("title") or item_name or "Unknown")
+    title = cleanTitle(parsed.get("title") or query or item_name or "Unknown")
     year = cleanYear(parsed.get("year"))
     base_metadata = {
         "metadata_title": title,
@@ -159,10 +158,10 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     if not SCAN_METADATA:
         return base_metadata, False, "Metadata scanning is disabled."
     try:
-        data = search_tmdb(title, year, is_series)
+        data = search_metadata(title, year, is_series)
         if not data:
-            logging.warning("No TMDB match for %s; keeping filename metadata.", title)
-            return base_metadata, False, "No TMDB match."
+            logging.warning("No metadata match for %s; keeping filename metadata.", title)
+            return base_metadata, False, "No metadata match."
         title = cleanTitle(data["title"])
         year = data["year"]
         root = f"{title} ({year})" if year else title
@@ -178,14 +177,15 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
             "metadata_filename": filename,
             "metadata_rootfoldername": root,
             "metadata_link": data["link"],
+            "metadata_provider": data.get("provider", "tmdb"),
             "metadata_image": data["image"],
             "metadata_backdrop": data["backdrop"],
         })
-        return base_metadata, True, "TMDB metadata found."
+        return base_metadata, True, "Metadata found."
     except (httpx.HTTPError, ValueError, TypeError, KeyError):
         # Never log request headers or token-bearing exception details.
-        logging.warning("TMDB lookup failed for %s; check token, connectivity and response. Keeping filename metadata.", title)
-        return base_metadata, False, "TMDB lookup failed."
+        logging.warning("Metadata lookup failed for %s; check token, connectivity and response. Keeping filename metadata.", title)
+        return base_metadata, False, "Metadata lookup failed."
 
 def getDownloadLink(url: str):
     response = requestWrapper(general_http_client, "GET", url)

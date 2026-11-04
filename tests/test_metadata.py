@@ -12,7 +12,7 @@ from functions import torboxFunctions as torbox
 class MetadataTests(unittest.TestCase):
     def setUp(self):
         metadata.lookup.cache_clear()
-        self.env = patch.dict(os.environ, {'TMDB_API_KEY': 'tmdb-test', 'METADATA_LANGUAGE': 'pl-PL'})
+        self.env = patch.dict(os.environ, {'TMDB_API_KEY': 'tmdb-test', 'METADATA_LANGUAGE': 'pl-PL', 'METADATA_PROVIDERS': 'tmdb'})
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -95,12 +95,11 @@ class MetadataTests(unittest.TestCase):
 
     def test_missing_key_no_request(self):
         with patch.dict(os.environ, {'TMDB_API_KEY': ''}), patch.object(metadata.httpx, 'Client') as client:
-            with self.assertRaises(ValueError):
-                metadata.search('Dune', None, False)
+            self.assertIsNone(metadata.search('Dune', None, False))
             client.assert_not_called()
 
     def test_disabled_no_lookup(self):
-        with patch.object(torbox, 'SCAN_METADATA', False), patch.object(torbox, 'search_tmdb') as search:
+        with patch.object(torbox, 'SCAN_METADATA', False), patch.object(torbox, 'search_metadata') as search:
             self.assertFalse(torbox.searchMetadata('Dune', {}, 'Dune.mkv', '', '', 'Dune')[1])
             search.assert_not_called()
 

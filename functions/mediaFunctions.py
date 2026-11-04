@@ -11,23 +11,24 @@ def constructSeriesTitle(season = None, episode = None, folder: bool = False):
     """
 
 
-    title_season = None
-    title_episode = None
+    def label(value, prefix):
+        if isinstance(value, list):
+            values = [n for n in value if isinstance(n, int) and n >= 0]
+            if not values:
+                return None
+            if len(values) == 1:
+                return f"{prefix}{values[0]:02}"
+            return f"{prefix}{values[0]:02}-{prefix}{values[-1]:02}"
+        if isinstance(value, int) and value >= 0:
+            return f"{prefix}{value:02}"
+        return None
 
-    if isinstance(season, list):
-        # get first and last season
-        title_season = f"S{season[0]:02}-S{season[-1]:02}"
-    elif isinstance(season, int) or season is not None:
-        if folder:
-            title_season = f"Season {season}"
-        else:
-            title_season = f"S{season:02}"
-    
-    if isinstance(episode, list):
-        # get first and last episode
-        title_episode = f"E{episode[0]:02}-E{episode[-1]:02}"
-    elif isinstance(episode, int) or episode is not None:
-        title_episode = f"E{episode:02}"
+    title_season = label(season, "S")
+    title_episode = label(episode, "E")
+    if folder and title_season:
+        if isinstance(season, list):
+            return title_season
+        return f"Season {season}"
 
     if title_season and title_episode:
         return f"{title_season}{title_episode}"
@@ -66,3 +67,24 @@ def cleanYear(year: str | int):
     except Exception as e:
         logging.error(f"Error cleaning year: {e}")
         return None
+
+
+def parseMediaName(file_name, parent_name=""):
+    """Repair PTN's empty episode lists and parse absolute anime numbering."""
+    import PTN
+    parent = PTN.parse(parent_name or "")
+    file_data = PTN.parse(file_name)
+    parsed = {**parent, **{k: v for k, v in file_data.items()
+                          if v is not None and v != []}}
+    # Release-group tags and technical brackets must not become the search title.
+    name = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", file_name)
+    name = re.sub(r"\.[^.]+$", "", name).strip()
+    match = re.fullmatch(r"(.+?)\s+-\s+(\d{1,4})(?:v\d+)?\s*", name, re.IGNORECASE)
+    if match and not file_data.get("episode"):
+        parsed["title"] = match[1].strip()
+        parsed["episode"] = int(match[2])
+        parsed["absolute_episode"] = True
+    for key in ("season", "episode"):
+        if parsed.get(key) == []:
+            parsed.pop(key)
+    return parsed

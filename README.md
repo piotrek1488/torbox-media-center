@@ -9,7 +9,7 @@ The TorBox Media Center allows you to easily mount your TorBox media in a no-fri
 
 ### ✨ Features
 
-- Organizing your media automatically, using the [TMDB API](https://developer.themoviedb.org/docs)
+- Organizing your media automatically, using TMDB, TVDB and Kitsu metadata providers
 - Mounting your media simply and safely
 - Making sure your media is easily discoverable by media players
 - Fast and effecient.
@@ -92,9 +92,9 @@ To run this project you will need to add the following environment variables to 
 
 `MOUNT_REFRESH_TIME` How fast you would like your mount to look for new files. Must be either `slowest` for every 24 hours, `very_slow` for every 12 hours, `slow` for every 6 hours, `normal` for every 3 hours, `fast` for every 2 hours or `ultra_fast` for every 1 hour. The default is `normal` and is optional.
 
-`ENABLE_METADATA` Set to `true` to match movies and TV series using TMDB. Set `TMDB_API_KEY` in `.env` or the container environment. Titles, premiere years and artwork come from TMDB; season and episode numbers come from filenames (e.g. `S02E03`). Unmatched files and provider failures keep filename-based metadata. `RAW_MODE=true` disables metadata lookup.
+`ENABLE_METADATA` Set to `true` to match movies, TV series and anime. Configure providers with `METADATA_PROVIDERS=tmdb,tvdb,kitsu` in `.env` or the container environment. Providers are tried in order until one matches; errors fall through to the next provider. TMDB and TVDB are skipped without their keys; Kitsu needs no key. Titles, premiere years and artwork come from the selected provider; season and episode numbers come from filenames (e.g. `S02E03`). Unmatched files and provider failures keep filename-based metadata. `RAW_MODE=true` disables metadata lookup.
 
-`TMDB_API_KEY` Your TMDB API key (v3 auth), available in [TMDB account API settings](https://www.themoviedb.org/settings/api). This is separate from the TorBox key and required only when metadata is enabled.
+`TMDB_API_KEY` Your TMDB API key (v3 auth), available in [TMDB account API settings](https://www.themoviedb.org/settings/api). This is separate from the TorBox key and needed to use TMDB.
 
 `METADATA_LANGUAGE` TMDB result language, default `pl-PL`. Use `en-US` for English.
 
@@ -249,3 +249,10 @@ For support, email [contact@torbox.app](mailto:contact@torbox.app) or join our D
 Contributions are always welcome!
 
 Please make sure to follow [Conventional Commits](https://conventionalcommits.org/) when creating commit messages. We will authorize most pull requests, so don't hesitate to help out!
+
+
+`METADATA_PROVIDERS` Ordered comma-separated providers, default `tmdb,tvdb,kitsu`. For anime-first lookup use `kitsu,tmdb,tvdb`. No cross-provider field merging is performed.
+
+`TVDB_API_KEY` Optional TVDB v4 API key. `TVDB_PIN` is required only for subscriber-supported keys. Configure both in `.env` or Docker Compose. TVDB access is subject to your key's terms and entitlement. See [TVDB API documentation](https://thetvdb.github.io/v4-api/).
+
+Anime filenames such as `[Group] Dragon Ball - 118 [v2].mkv` retain absolute episode numbering (`E118`). This does not map absolute anime episodes to TMDB/TVDB season numbering. See [development notes](docs/development-pl.md).

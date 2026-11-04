@@ -7,6 +7,9 @@ TORBOX_API_KEY=your_torbox_key
 ENABLE_METADATA=true
 TMDB_API_KEY=your_tmdb_v3_api_key
 METADATA_LANGUAGE=pl-PL
+METADATA_PROVIDERS=tmdb,tvdb,kitsu
+TVDB_API_KEY=
+TVDB_PIN=
 RAW_MODE=false
 ```
 

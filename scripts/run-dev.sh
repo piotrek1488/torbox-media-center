@@ -8,9 +8,6 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 if not os.getenv('TORBOX_API_KEY', '').strip():
     raise SystemExit('Add TORBOX_API_KEY to your local .env before starting.')
-if (os.getenv('ENABLE_METADATA', 'false').lower() == 'true'
-        and os.getenv('RAW_MODE', 'false').lower() != 'true'
-        and not os.getenv('TMDB_API_KEY', '').strip()):
-    raise SystemExit('Add TMDB_API_KEY to .env for TMDB metadata.')
+
 PY
 exec .venv/bin/python main.py

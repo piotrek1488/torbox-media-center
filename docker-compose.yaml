@@ -14,6 +14,9 @@ services:
         environment:
             TORBOX_API_KEY: ${TORBOX_API_KEY:?Set TORBOX_API_KEY in .env}
             TMDB_API_KEY: ${TMDB_API_KEY:-}
+            TVDB_API_KEY: ${TVDB_API_KEY:-}
+            TVDB_PIN: ${TVDB_PIN:-}
+            METADATA_PROVIDERS: ${METADATA_PROVIDERS:-tmdb,tvdb,kitsu}
             METADATA_LANGUAGE: ${METADATA_LANGUAGE:-pl-PL}
             MOUNT_METHOD: strm
             MOUNT_PATH: /torbox
