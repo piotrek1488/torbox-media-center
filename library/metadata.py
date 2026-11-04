@@ -2,6 +2,8 @@
 from difflib import SequenceMatcher
 from functools import lru_cache
 import os
+import json
+from pathlib import Path
 import re
 import unicodedata
 
@@ -9,8 +11,14 @@ import httpx
 
 
 def normalized(title):
-    title = unicodedata.normalize('NFKD', title).casefold()
-    return re.sub(r'[^\w]+', ' ', ''.join(c for c in title if not unicodedata.combining(c))).strip()
+    title = unicodedata.normalize('NFKD', title).casefold().replace('ł', 'l')
+    title = re.sub(r'[^\w]+', ' ', ''.join(c for c in title if not unicodedata.combining(c))).strip()
+    # Localized part markers carry identity: part 1 must never match part 2.
+    numbers = {'one': '1', 'two': '2', 'first': '1', 'second': '2',
+               'pierwsza': '1', 'druga': '2', 'i': '1', 'ii': '2'}
+    title = re.sub(r'\b(?:cz|czesc|part)\s*(\d+|one|two|first|second|pierwsza|druga|ii|i)\b',
+                   lambda m: 'part ' + numbers.get(m[1], m[1]), title)
+    return title
 
 
 def numbered_movie(title):
@@ -20,19 +28,31 @@ def numbered_movie(title):
 
 
 def title_similarity(query, title):
+    wanted_part = re.search(r'\bpart (\d+)\b', normalized(query))
+    found_part = re.search(r'\bpart (\d+)\b', normalized(title))
+    if wanted_part and (not found_part or wanted_part[1] != found_part[1]):
+        return 0.0
     wanted, found = numbered_movie(query), numbered_movie(title)
     if wanted and found:
         return 1.0 if wanted == found else 0.0
     return SequenceMatcher(None, normalized(query), normalized(title)).ratio()
 
 
-def query_variants(query, is_series):
+def query_variants(query, is_series, year=None):
     variants = [query]
     if not is_series:
         match = re.match(r'^(.*?\s+(?:movie|film)\s*#?\s*\d+)\b', query, re.IGNORECASE)
         if match and match[1].strip() != query:
             variants.append(match[1].strip())
-    return variants
+    if year:
+        without_year = re.sub(rf'\s+[([]?{year}[)\]]?$', '', query).strip()
+        if without_year and without_year != query:
+            variants.append(without_year)
+    for variant in list(variants):
+        expanded = re.sub(r'\bcz\.?\s*(\d+)\b', r'część \1', variant, flags=re.IGNORECASE)
+        if expanded != variant:
+            variants.append(expanded)
+    return list(dict.fromkeys(variants))
 
 
 @lru_cache(maxsize=512)
@@ -174,11 +194,11 @@ def lookup_tvdb(query, year, is_series, api_key, pin, language, day):
     return choose(query, year, is_series, candidates)
 
 
-def search(query, year, is_series):
+def search_providers(query, year, is_series):
     import logging
     import time
     language = os.getenv('METADATA_LANGUAGE', 'pl-PL')
-    for variant in query_variants(query, is_series):
+    for variant in query_variants(query, is_series, year):
         for provider in os.getenv('METADATA_PROVIDERS', 'tmdb,tvdb,kitsu').split(','):
             provider = provider.strip().lower()
             try:
@@ -203,3 +223,31 @@ def search(query, year, is_series):
             except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
                 logging.warning('Metadata provider %s failed; trying next provider.', provider)
     return None
+
+
+@lru_cache(maxsize=8)
+def load_aliases(path, modified):
+    with open(path, encoding='utf-8') as source:
+        entries = json.load(source)
+    return {normalized(name): entry for name, entry in entries.items()}
+
+
+def search(query, year, is_series):
+    result = search_providers(query, year, is_series)
+    if result:
+        return result
+    # Explicit aliases cover alternate translations that fuzzy matching cannot infer.
+    path = Path(os.getenv('METADATA_ALIASES_FILE', str(Path(__file__).resolve().parents[1] / 'assets/metadata-aliases.json')))
+    if not path.is_file():
+        return None
+    try:
+        alias = load_aliases(str(path), path.stat().st_mtime_ns).get(normalized(query))
+        if not alias or alias['type'] != ('series' if is_series else 'movie'):
+            return None
+        if year and not is_series and alias.get('year') and year != alias['year']:
+            return None
+        return search_providers(alias['query'], alias.get('year') or year, is_series)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        import logging
+        logging.warning('Invalid metadata aliases file; keeping filename metadata.')
+        return None

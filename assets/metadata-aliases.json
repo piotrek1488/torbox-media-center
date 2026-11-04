@@ -1,0 +1,8 @@
+{
+  "Batman Długie Halloween cz.1": {"query": "Batman: The Long Halloween, Part One", "year": 2021, "type": "movie"},
+  "Batman Długie Halloween cz.2": {"query": "Batman: The Long Halloween, Part Two", "year": 2021, "type": "movie"},
+  "Batman Mroczny Rycerz Powrot cz.1": {"query": "Batman: The Dark Knight Returns, Part 1", "year": 2012, "type": "movie"},
+  "Batman Mroczny Rycerz Powrot cz.2": {"query": "Batman: The Dark Knight Returns, Part 2", "year": 2013, "type": "movie"},
+  "Batman Przyszlosci Powrot Jokera": {"query": "Batman Beyond: Return of the Joker", "year": 2000, "type": "movie"},
+  "Batman Powrót Krzyżowców w Pelerynach": {"query": "Batman: Return of the Caped Crusaders", "year": 2016, "type": "movie"}
+}

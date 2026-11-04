@@ -89,6 +89,11 @@ def parseMediaName(file_name, parent_name=""):
         # A film in a season-pack folder must not inherit episode numbering.
         parsed.pop("season", None)
         parsed.pop("episode", None)
+    # PTN can take the end of a broadcast range as year and leave the start in title.
+    years = re.search(r'(?<!\d)((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})(?!\d)', file_name)
+    if years and int(years[1]) <= int(years[2]):
+        parsed["year"] = int(years[1])
+        parsed["title"] = re.sub(rf'\s+{years[1]}$', '', parsed.get("title", "")).strip()
     for key in ("season", "episode"):
         if parsed.get(key) == []:
             parsed.pop(key)

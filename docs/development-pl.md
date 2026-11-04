@@ -66,3 +66,14 @@ Integracje TVDB i Kitsu sprawdzono na kontrolowanych odpowiedziach HTTP zgodnych
 
 
 Numerowane filmy anime z lokalnym podtytułem, np. `Dragon Ball Z Movie 13 - Eksplozja Smoczej Pięści!! Jeśli nie Goku, to kto`, mają dodatkową próbę wyszukania po `Dragon Ball Z Movie 13`. Dopasowanie może użyć numerowanego aliasu providera (np. w Kitsu). Wymagana jest zgodność nazwy cyklu i numeru filmu; numer 13 nie oznacza trzynastego wyniku wyszukiwania. Oznaczenie `Movie 13` klasyfikuje plik jako film, nawet w folderze z oznaczeniem sezonu. Jeżeli provider nie udostępnia odpowiedniego numerowanego tytułu/aliasu, plik nadal może pozostać bez dopasowania. Nie zastosowano stałego mapowania numerów Dragon Ball na identyfikatory API.
+
+
+Zakres lat emisji w nazwie (np. `Yattodetaman.1981-1982.S01E01...`) jest rozpoznawany jako rok początkowy 1981, bez pozostawiania roku w tytule. Przy nieudanym wyszukiwaniu dostępne są też warianty zapytania bez końcowego roku i z rozwiniętym `cz.2` → `część 2`. Dopasowanie części odrzuca inną część lub brak numeru części.
+
+`assets/metadata-aliases.json` zawiera jawne aliasy alternatywnych tłumaczeń sześciu filmów Batman. Są używane dopiero po nieudanym zwykłym wyszukiwaniu. Alias podaje kanoniczne zapytanie, rok i typ; nie zastępuje odpowiedzi API i nie jest używany przy sprzecznym roku/typie pliku. Dla własnych nazw można wskazać inny plik przez `METADATA_ALIASES_FILE` (w kontenerze trzeba go zamontować). Przykład wpisu:
+
+```json
+{"Moja alternatywna nazwa": {"query": "Canonical Movie Title", "year": 2021, "type": "movie"}}
+```
+
+Powtarzające się ostrzeżenia o braku dopasowania tego samego tytułu/roku/typu są ograniczone do jednego w procesie (pamięć obejmuje ostatnie 512 takich kombinacji). Samo ograniczenie logów nie oznacza udanego dopasowania.

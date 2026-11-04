@@ -11,6 +11,16 @@ import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
+from functools import lru_cache
+from threading import Lock
+
+_no_match_lock = Lock()
+
+
+@lru_cache(maxsize=512)
+def warn_no_match(title, year, is_series):
+    logging.warning("No metadata match for %s; keeping filename metadata.", title)
+
 
 class DownloadType(Enum):
     torrent = "torrents"
@@ -162,7 +172,8 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     try:
         data = search_metadata(title, year, is_series)
         if not data:
-            logging.warning("No metadata match for %s; keeping filename metadata.", title)
+            with _no_match_lock:
+                warn_no_match(title, year, is_series)
             return base_metadata, False, "No metadata match."
         title = cleanTitle(data["title"])
         year = data["year"]
