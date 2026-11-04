@@ -149,7 +149,7 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     season, episode = parsed.get("season"), parsed.get("episode")
     if parsed.get("media_type") == "movie":
         season = episode = None
-    is_series = season is not None or episode is not None
+    is_series = parsed.get("media_type") == "series" or season is not None or episode is not None
     title = cleanTitle(parsed.get("title") or query or item_name or "Unknown")
     year = cleanYear(parsed.get("year"))
     base_metadata = {
@@ -170,7 +170,14 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     if not SCAN_METADATA:
         return base_metadata, False, "Metadata scanning is disabled."
     try:
-        data = search_metadata(title, year, is_series)
+        data = None
+        selected = None
+        candidates = parsed.get("metadata_candidates") or [{"title": title, "year": year, "source": "filename"}]
+        for candidate in candidates:
+            data = search_metadata(candidate["title"], cleanYear(candidate.get("year")), is_series)
+            if data:
+                selected = candidate
+                break
         if not data:
             with _no_match_lock:
                 warn_no_match(title, year, is_series)
@@ -181,7 +188,8 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
         extension = os.path.splitext(file_name)[-1]
         if is_series:
             numbering = constructSeriesTitle(season=season, episode=episode)
-            filename = f"{title} {numbering}{extension}" if numbering else f"{title}{extension}"
+            # Unnumbered episodes must retain distinct names rather than all becoming S01.
+            filename = f"{title} {numbering}{extension}" if episode is not None and numbering else file_name
         else:
             filename = f"{root}{extension}"
         base_metadata.update({
@@ -191,6 +199,8 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
             "metadata_rootfoldername": root,
             "metadata_link": data["link"],
             "metadata_provider": data.get("provider", "tmdb"),
+            "metadata_query": selected["title"],
+            "metadata_query_source": selected["source"],
             "metadata_image": data["image"],
             "metadata_backdrop": data["backdrop"],
         })

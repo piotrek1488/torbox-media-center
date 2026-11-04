@@ -95,19 +95,6 @@ def parseMediaName(file_name, parent_name="", file_path=""):
             parsed["season"] = int(leading_episode[2])
         else:
             parsed["absolute_episode"] = True
-        folders = list(reversed(re.split(r"[/\\]", file_path or "")[:-1]))
-        for folder in [*folders, parent_name]:
-            context = PTN.parse(folder or "")
-            candidate = context.get("title", "").strip()
-            if not candidate or re.fullmatch(r"(?:season|sezon|s)\s*\d+|[0-9a-f]{16,}|(?:1080|720|2160)p|episodes?|odcinki|anime|movies|series", candidate, re.IGNORECASE):
-                continue
-            parsed["title"] = candidate
-            if context.get("year"):
-                parsed["year"] = context["year"]
-            context_years = re.search(r'(?<!\d)((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})(?!\d)', folder)
-            if context_years and int(context_years[1]) <= int(context_years[2]):
-                parsed["year"] = int(context_years[1])
-            break
     if re.search(r"\b(?:movie|film)\s*#?\s*\d+\b", name, re.IGNORECASE):
         parsed["media_type"] = "movie"
         # A film in a season-pack folder must not inherit episode numbering.
@@ -121,4 +108,59 @@ def parseMediaName(file_name, parent_name="", file_path=""):
     for key in ("season", "episode"):
         if parsed.get(key) == []:
             parsed.pop(key)
+    candidates = metadataCandidates(file_name, parent_name, file_path, parsed, bool(leading_episode))
+    if candidates:
+        parsed["metadata_candidates"] = candidates
+        parsed["title"] = candidates[0]["title"]
+        if candidates[0].get("year"):
+            parsed["year"] = candidates[0]["year"]
     return parsed
+
+
+def metadataCandidates(file_name, parent_name, file_path, parsed, episode_only=False):
+    """Bounded title hypotheses, each to be validated by a metadata provider."""
+    import PTN
+    folders = list(reversed(re.split(r"[/\\]", file_path or "")[:-1]))
+    contexts = []
+    series_context = False
+    for raw, source in [(folder, "folder") for folder in folders] + [(parent_name, "download")]:
+        if not raw:
+            continue
+        context = PTN.parse(raw)
+        if (parsed.get("media_type") != "movie" and not parsed.get("absolute_episode")
+                and parsed.get("season") is None
+                and isinstance(context.get("season"), int)):
+            parsed["season"] = context["season"]
+        if context.get("season") is not None or re.search(r"\b(?:complete[ ._-]+(?:series|seasons?)|sezon[ ._-]*\d+|season[ ._-]*\d+)\b", raw, re.IGNORECASE):
+            series_context = True
+        title = context.get("title", "").strip()
+        if not title or not re.search(r"[^\W\d_]", title) or re.fullmatch(
+            r"(?:season|sezon|s)\s*\d+|[0-9a-f]{16,}|(?:1080|720|2160)p|episodes?|odcinki|anime|movies|series|downloads?|collection|anime collection|ciekawe filmy seriale|specials?|extras?|bonus|ova|batch",
+            title, re.IGNORECASE):
+            continue
+        year = context.get("year")
+        years = re.search(r'(?<!\d)((?:19|20)\d{2})\s*[-–]\s*((?:19|20)\d{2})(?!\d)', raw)
+        if years and int(years[1]) <= int(years[2]):
+            year = int(years[1])
+            title = re.sub(rf'\s+{years[1]}$', '', title).strip()
+        contexts.append({"title": title, "year": year, "source": source})
+    explicit_movie = parsed.get("media_type") == "movie"
+    if series_context and not explicit_movie:
+        parsed["media_type"] = "series"
+    file_candidate = {"title": parsed.get("title", ""), "year": parsed.get("year"), "source": "filename"}
+    # Complete-series packs often give episodes only descriptive names.
+    # Explicit series names in filenames remain authoritative.
+    file_key = re.sub(r"\W+", " ", file_candidate["title"]).casefold().strip()
+    named_series = any(file_key.startswith(re.sub(r"\W+", " ", c["title"]).casefold().strip()) for c in contexts)
+    prefer_context = episode_only or (series_context and not explicit_movie and not named_series)
+    ordered = contexts + ([] if episode_only else [file_candidate]) if prefer_context else [file_candidate] + contexts
+    candidates, seen = [], set()
+    for candidate in ordered:
+        key = (candidate["title"].casefold(), candidate["year"])
+        if not candidate["title"] or key in seen:
+            continue
+        seen.add(key)
+        candidates.append(candidate)
+        if len(candidates) == 4:
+            break
+    return candidates
