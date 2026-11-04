@@ -137,6 +137,8 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     parsed = {**parseMediaName(file_name, item_name),
               **{k: v for k, v in title_data.items() if v is not None and v != []}}
     season, episode = parsed.get("season"), parsed.get("episode")
+    if parsed.get("media_type") == "movie":
+        season = episode = None
     is_series = season is not None or episode is not None
     title = cleanTitle(parsed.get("title") or query or item_name or "Unknown")
     year = cleanYear(parsed.get("year"))

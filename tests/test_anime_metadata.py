@@ -41,6 +41,32 @@ class AnimeTests(unittest.TestCase):
         other = parseMediaName('[SubsPlease] Frieren - 12 (1080p).mkv')
         self.assertEqual(other['episode'], 12)
 
+    def test_numbered_movie_query_fallback_and_polish_subtitle(self):
+        title = 'Dragon Ball Z Movie 13 - Eksplozja Smoczej Pięści!! Jeśli nie Goku, to kto'
+        calls = []
+        def handler(request):
+            query = request.url.params['filter[text]']
+            calls.append(query)
+            results = [] if query == title else [
+                {'id': '12', 'attributes': {'canonicalTitle': 'Dragon Ball Z Movie 12: Fukkatsu no Fusion', 'subtype': 'movie', 'startDate': '1995-03-04'}},
+                {'id': '13', 'attributes': {'canonicalTitle': 'Dragon Ball Z Movie 13: Ryuuken Bakuhatsu!! Gokuu ga Yaraneba Dare ga Yaru', 'titles': {'en': 'Dragon Ball Z: Wrath of the Dragon'}, 'subtype': 'movie', 'startDate': '1995-07-15'}},
+            ]
+            return httpx.Response(200, json={'data': results})
+        with self.client(handler), patch.dict(os.environ, {'METADATA_PROVIDERS': 'kitsu'}), patch.object(torbox, 'SCAN_METADATA', True):
+            result, success, _ = torbox.searchMetadata(title, {}, title + '.mkv', '', '', 'Dragon Ball Z S01')
+        self.assertTrue(success)
+        self.assertEqual(calls, [title, 'Dragon Ball Z Movie 13'])
+        self.assertEqual(result['metadata_mediatype'], 'movie')
+        self.assertEqual(result['metadata_years'], 1995)
+        self.assertIn('Movie 13', result['metadata_title'])
+        self.assertNotIn('metadata_foldername', result)
+        self.assertIsNone(result['metadata_season'])
+
+    def test_numbered_movie_never_accepts_different_number_or_franchise(self):
+        self.assertEqual(metadata.title_similarity('Dragon Ball Z Movie 13', 'Dragon Ball Z Movie 12'), 0)
+        self.assertEqual(metadata.title_similarity('Dragon Ball Z Movie 13', 'Dragon Ball Movie 13'), 0)
+        self.assertEqual(metadata.query_variants('Dragon Ball Z Movie 13 - Polish subtitle', True), ['Dragon Ball Z Movie 13 - Polish subtitle'])
+
     def test_absolute_episode_overrides_pack_range(self):
         result = parseMediaName(self.filename, 'Dragon Ball - 001-153')
         self.assertEqual(result['episode'], 118)

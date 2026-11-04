@@ -84,6 +84,11 @@ def parseMediaName(file_name, parent_name=""):
         parsed["title"] = match[1].strip()
         parsed["episode"] = int(match[2])
         parsed["absolute_episode"] = True
+    if re.search(r"\b(?:movie|film)\s*#?\s*\d+\b", name, re.IGNORECASE):
+        parsed["media_type"] = "movie"
+        # A film in a season-pack folder must not inherit episode numbering.
+        parsed.pop("season", None)
+        parsed.pop("episode", None)
     for key in ("season", "episode"):
         if parsed.get(key) == []:
             parsed.pop(key)

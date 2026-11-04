@@ -13,6 +13,28 @@ def normalized(title):
     return re.sub(r'[^\w]+', ' ', ''.join(c for c in title if not unicodedata.combining(c))).strip()
 
 
+def numbered_movie(title):
+    """An explicit franchise + movie number, never an index into search results."""
+    match = re.match(r'^(.*?)\s+(?:movie|film)\s*#?\s*(\d+)\b', normalized(title))
+    return (match[1], int(match[2])) if match else None
+
+
+def title_similarity(query, title):
+    wanted, found = numbered_movie(query), numbered_movie(title)
+    if wanted and found:
+        return 1.0 if wanted == found else 0.0
+    return SequenceMatcher(None, normalized(query), normalized(title)).ratio()
+
+
+def query_variants(query, is_series):
+    variants = [query]
+    if not is_series:
+        match = re.match(r'^(.*?\s+(?:movie|film)\s*#?\s*\d+)\b', query, re.IGNORECASE)
+        if match and match[1].strip() != query:
+            variants.append(match[1].strip())
+    return variants
+
+
 @lru_cache(maxsize=512)
 def lookup(query, year, is_series, api_key, language):
     """Cache by series title, never by episode filename; errors are not cached."""
@@ -41,7 +63,7 @@ def lookup(query, year, is_series, api_key, language):
         if not isinstance(title, str) or not title.strip():
             continue
         original = result.get('original_name' if is_series else 'original_title') or title
-        score = max(SequenceMatcher(None, normalized(query), normalized(name)).ratio()
+        score = max(title_similarity(query, name)
                     for name in (title, original))
         date = result.get('first_air_date' if is_series else 'release_date') or ''
         result_year = int(date[:4]) if date[:4].isdigit() else None
@@ -66,7 +88,7 @@ def choose(query, year, is_series, candidates):
     for candidate, names in candidates:
         if year and not is_series and candidate['year'] != year:
             continue
-        scores = [SequenceMatcher(None, normalized(query), normalized(name)).ratio()
+        scores = [title_similarity(query, name)
                   for name in names if isinstance(name, str) and name.strip()]
         score = max(scores, default=0)
         if score >= 0.8:
@@ -156,27 +178,28 @@ def search(query, year, is_series):
     import logging
     import time
     language = os.getenv('METADATA_LANGUAGE', 'pl-PL')
-    for provider in os.getenv('METADATA_PROVIDERS', 'tmdb,tvdb,kitsu').split(','):
-        provider = provider.strip().lower()
-        try:
-            if provider == 'tmdb':
-                key = os.getenv('TMDB_API_KEY', '').strip()
-                if not key:
+    for variant in query_variants(query, is_series):
+        for provider in os.getenv('METADATA_PROVIDERS', 'tmdb,tvdb,kitsu').split(','):
+            provider = provider.strip().lower()
+            try:
+                if provider == 'tmdb':
+                    key = os.getenv('TMDB_API_KEY', '').strip()
+                    if not key:
+                        continue
+                    result = lookup(variant, year, is_series, key, language)
+                elif provider == 'tvdb':
+                    key = os.getenv('TVDB_API_KEY', '').strip()
+                    if not key:
+                        continue
+                    result = lookup_tvdb(variant, year, is_series, key,
+                                         os.getenv('TVDB_PIN', '').strip(), language, int(time.time() // 86400))
+                elif provider == 'kitsu':
+                    result = lookup_kitsu(variant, year, is_series)
+                else:
+                    logging.warning('Unknown metadata provider: %s', provider)
                     continue
-                result = lookup(query, year, is_series, key, language)
-            elif provider == 'tvdb':
-                key = os.getenv('TVDB_API_KEY', '').strip()
-                if not key:
-                    continue
-                result = lookup_tvdb(query, year, is_series, key,
-                                     os.getenv('TVDB_PIN', '').strip(), language, int(time.time() // 86400))
-            elif provider == 'kitsu':
-                result = lookup_kitsu(query, year, is_series)
-            else:
-                logging.warning('Unknown metadata provider: %s', provider)
-                continue
-            if result:
-                return {**result, 'provider': provider}
-        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-            logging.warning('Metadata provider %s failed; trying next provider.', provider)
+                if result:
+                    return {**result, 'provider': provider}
+            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+                logging.warning('Metadata provider %s failed; trying next provider.', provider)
     return None
