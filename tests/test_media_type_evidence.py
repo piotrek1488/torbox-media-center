@@ -1,5 +1,7 @@
 import os
 import unittest
+import httpx
+from library import metadata
 from unittest.mock import patch
 
 os.environ.setdefault('TORBOX_API_KEY', 'offline-test-placeholder')
@@ -8,6 +10,33 @@ from functions import torboxFunctions as torbox
 
 
 class MediaTypeEvidenceTests(unittest.TestCase):
+    def test_exact_user_paths_use_tmdb_movie_endpoint(self):
+        folders = [
+            '[DEVIL-TORRENTS.PL] Zootopia.2.2025.PLDUB.MULTi.2160p.iT.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265-P2P',
+            '[XTORRENTY.ORG] Zootopia.2.2025.MULTi.2160p.AMZN.WEB-DL.HDR.H.265.DD5.1-RX',
+        ]
+        client = httpx.Client
+        for folder in folders:
+            with self.subTest(folder=folder):
+                metadata.lookup.cache_clear()
+                name = folder.split('] ', 1)[1] + '.mkv'
+                requests = []
+                def handler(request):
+                    requests.append(request)
+                    self.assertEqual(request.url.path, '/3/search/movie')
+                    self.assertEqual(request.url.params['query'], 'Zootopia 2')
+                    self.assertEqual(request.url.params['primary_release_year'], '2025')
+                    return httpx.Response(200, json={'results': [{'id': 1084242, 'title': 'Zwierzogród 2', 'original_title': 'Zootopia 2', 'release_date': '2025-11-26'}]})
+                with patch.dict(os.environ, {'METADATA_PROVIDERS': 'tmdb', 'TMDB_API_KEY': 'fixture'}), patch.object(metadata.httpx, 'Client', side_effect=lambda **kwargs: client(**kwargs, transport=httpx.MockTransport(handler))), patch.object(torbox, 'SCAN_METADATA', True), patch.object(torbox, 'insertData'):
+                    result = torbox.process_file(
+                        {'id': 1, 'name': '9061af8', 'hash': 'opaque'},
+                        {'id': 2, 'short_name': name, 'name': folder + '/' + name, 'mimetype': 'video/x-matroska', 'size': 100},
+                        torbox.DownloadType.torrent)
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(result['metadata_mediatype'], 'movie')
+                self.assertEqual(result['metadata_filename'], 'Zwierzogród 2 (2025).mkv')
+                self.assertIsNone(result['metadata_season'])
+
     def test_year_in_filename_precedes_folder_type(self):
         parsed = parseMediaName('Zootopia.2.2025.mkv', '9061af8', 'Season 1/Zootopia.2.2025.mkv')
         self.assertEqual(metadataMediaTypes(parsed), ['movie', 'series'])
