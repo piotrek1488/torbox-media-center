@@ -3,7 +3,7 @@ import httpx
 from enum import Enum
 from library.torbox import TORBOX_API_KEY
 from library.app import SCAN_METADATA
-from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear, parseMediaName
+from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear, parseMediaName, metadataMediaTypes
 from library.metadata import search as search_metadata, capture_diagnostics
 from functions.databaseFunctions import insertData
 import os
@@ -24,7 +24,7 @@ def warn_no_match(title, year, is_series, details=""):
                     title, "series" if is_series else "movie", year, details)
 
 
-def failure_details(candidates, events):
+def failure_details(candidates, events, media_types=None):
     outcomes = []
     for event in events:
         if event.get("status") not in {"response", "no_match", "error", "skipped_missing_key"}:
@@ -33,7 +33,7 @@ def failure_details(candidates, events):
         summary = {key: event[key] for key in ("provider", "status", "http_status", "error_type", "results") if key in event}
         if summary not in outcomes:
             outcomes.append(summary)
-    return json.dumps({"attempts": candidates, "outcomes": outcomes}, ensure_ascii=False)
+    return json.dumps({"attempts": candidates, "lookup_types": media_types, "outcomes": outcomes}, ensure_ascii=False)
 
 
 
@@ -164,7 +164,8 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
     season, episode = parsed.get("season"), parsed.get("episode")
     if parsed.get("media_type") == "movie":
         season = episode = None
-    is_series = parsed.get("media_type") == "series" or season is not None or episode is not None
+    media_types = metadataMediaTypes(parsed)
+    is_series = media_types[0] == "series"
     title = cleanTitle(parsed.get("title") or query or item_name or "Unknown")
     year = cleanYear(parsed.get("year"))
     base_metadata = {
@@ -189,14 +190,18 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
         selected = None
         candidates = parsed.get("metadata_candidates") or [{"title": title, "year": year, "source": "filename"}]
         with capture_diagnostics() as events:
-            for candidate in candidates:
-                data = search_metadata(candidate["title"], cleanYear(candidate.get("year")), is_series)
+            for media_type in media_types:
+                for candidate in candidates:
+                    data = search_metadata(candidate["title"], cleanYear(candidate.get("year")), media_type == "series")
+                    if data:
+                        selected = candidate
+                        is_series = media_type == "series"
+                        break
                 if data:
-                    selected = candidate
                     break
         if not data:
             with _no_match_lock:
-                warn_no_match(title, year, is_series, failure_details(candidates, events))
+                warn_no_match(title, year, is_series, failure_details(candidates, events, media_types))
             return base_metadata, False, "No metadata match."
         title = cleanTitle(data["title"])
         year = data["year"]
@@ -208,7 +213,14 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
             filename = f"{title} {numbering}{extension}" if episode is not None and numbering else file_name
         else:
             filename = f"{root}{extension}"
+        if is_series:
+            base_metadata.setdefault("metadata_foldername", constructSeriesTitle(season=season if season is not None else 1, folder=True))
+        else:
+            base_metadata.pop("metadata_foldername", None)
         base_metadata.update({
+            "metadata_mediatype": "series" if is_series else "movie",
+            "metadata_season": season if is_series else None,
+            "metadata_episode": episode if is_series else None,
             "metadata_title": title,
             "metadata_years": year,
             "metadata_filename": filename,

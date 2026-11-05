@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root))
 from dotenv import load_dotenv
 load_dotenv(root / '.env')
-from functions.mediaFunctions import parseMediaName
+from functions.mediaFunctions import parseMediaName, metadataMediaTypes
 from library import metadata
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -22,22 +22,25 @@ args = parser.parse_args()
 for name in ('httpx', 'httpcore'):
     logging.getLogger(name).setLevel(logging.CRITICAL)
 parsed = parseMediaName(args.filename, args.download, args.path)
-is_series = parsed.get('media_type') == 'series' or parsed.get('season') is not None or parsed.get('episode') is not None
-if parsed.get('media_type') == 'movie':
-    is_series = False
+media_types = metadataMediaTypes(parsed)
+is_series = media_types[0] == 'series'
 report = {
     'providers': os.getenv('METADATA_PROVIDERS', 'tmdb,tvdb,kitsu'),
     'language': os.getenv('METADATA_LANGUAGE', 'pl-PL'),
     'credentials_present': {name: bool(os.getenv(name, '').strip()) for name in ('TMDB_API_KEY', 'TVDB_API_KEY', 'TVDB_PIN')},
-    'type': 'series' if is_series else 'movie',
+    'type': media_types[0],
+    'lookup_types': media_types,
     'candidates': parsed.get('metadata_candidates', []),
 }
 if not args.offline:
     with metadata.capture_diagnostics() as events:
-        for candidate in report['candidates']:
-            result = metadata.search(candidate['title'], candidate.get('year'), is_series)
-            if result:
-                report['match'] = {key: result.get(key) for key in ('title', 'year', 'provider', 'link')}
+        for media_type in media_types:
+            for candidate in report['candidates']:
+                result = metadata.search(candidate['title'], candidate.get('year'), media_type == 'series')
+                if result:
+                    report['match'] = {key: result.get(key) for key in ('title', 'year', 'provider', 'link')}
+                    break
+            if 'match' in report:
                 break
     report['events'] = events
 print(json.dumps(report, ensure_ascii=False, indent=2))

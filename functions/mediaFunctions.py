@@ -69,10 +69,27 @@ def cleanYear(year: str | int):
         return None
 
 
+def opaqueMediaName(name):
+    return bool(re.fullmatch(r'(?=.*\d)[0-9a-f]{7,}', name or '', re.IGNORECASE))
+
+
+def metadataMediaTypes(parsed):
+    episodic = parsed.get('season') is not None or parsed.get('episode') is not None
+    contextual_series = parsed.get('media_type') == 'series' or episodic
+    if parsed.get('media_type') == 'movie':
+        return ['movie']
+    if parsed.get('file_type_hint') == 'movie':
+        return ['movie', 'series'] if contextual_series else ['movie']
+    return ['series'] if contextual_series else ['movie']
+
+
 def parseMediaName(file_name, parent_name="", file_path=""):
     """Repair PTN's empty episode lists and parse absolute anime numbering."""
     import PTN
-    parent = PTN.parse(parent_name or "")
+    parent = PTN.parse(parent_name or "") if not opaqueMediaName(parent_name) else {}
+    # Folder hypotheses must not silently supply an episode number for a file.
+    parent.pop("season", None)
+    parent.pop("episode", None)
     file_data = PTN.parse(file_name)
     parsed = {**parent, **{k: v for k, v in file_data.items()
                           if v is not None and v != []}}
@@ -117,6 +134,8 @@ def parseMediaName(file_name, parent_name="", file_path=""):
     for key in ("season", "episode"):
         if parsed.get(key) == []:
             parsed.pop(key)
+    if file_data.get("year") and parsed.get("season") is None and parsed.get("episode") is None:
+        parsed["file_type_hint"] = "movie"
     candidates = metadataCandidates(file_name, parent_name, file_path, parsed, bool(leading_episode))
     if candidates:
         parsed["metadata_candidates"] = candidates
@@ -133,14 +152,15 @@ def metadataCandidates(file_name, parent_name, file_path, parsed, episode_only=F
     contexts = []
     series_context = False
     for raw, source in [(folder, "folder") for folder in folders] + [(parent_name, "download")]:
-        if not raw:
+        if not raw or opaqueMediaName(raw):
             continue
         context = PTN.parse(raw)
-        if (parsed.get("media_type") != "movie" and not parsed.get("absolute_episode")
+        explicit_season = bool(re.search(r"(?<!\w)(?:s\d{1,2}(?:e\d{1,4})?|seasons?[ ._-]*\d+|sezon[ ._-]*\d+)(?!\w)", raw, re.IGNORECASE))
+        if (explicit_season and parsed.get("media_type") != "movie" and not parsed.get("absolute_episode")
                 and parsed.get("season") is None
                 and isinstance(context.get("season"), int)):
             parsed["season"] = context["season"]
-        if context.get("season") is not None or re.search(r"\b(?:complete[ ._-]+(?:series|seasons?)|sezon[ ._-]*\d+|season[ ._-]*\d+)\b", raw, re.IGNORECASE):
+        if explicit_season or re.search(r"\b(?:complete[ ._-]+(?:series|seasons?)|sezon[ ._-]*\d+|season[ ._-]*\d+)\b", raw, re.IGNORECASE):
             series_context = True
         title = context.get("title", "").strip()
         if not title or not re.search(r"[^\W\d_]", title) or re.fullmatch(
@@ -161,7 +181,7 @@ def metadataCandidates(file_name, parent_name, file_path, parsed, episode_only=F
     # Explicit series names in filenames remain authoritative.
     file_key = re.sub(r"\W+", " ", file_candidate["title"]).casefold().strip()
     named_series = any(file_key.startswith(re.sub(r"\W+", " ", c["title"]).casefold().strip()) for c in contexts)
-    prefer_context = episode_only or (series_context and not explicit_movie and not named_series)
+    prefer_context = episode_only or (series_context and not explicit_movie and parsed.get("file_type_hint") != "movie" and not named_series)
     ordered = contexts + ([] if episode_only else [file_candidate]) if prefer_context else [file_candidate] + contexts
     candidates, seen = [], set()
     for candidate in ordered:
