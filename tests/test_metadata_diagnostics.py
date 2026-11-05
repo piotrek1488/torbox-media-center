@@ -16,6 +16,25 @@ class DiagnosticsTests(unittest.TestCase):
         client = httpx.Client
         return patch.object(metadata.httpx, 'Client', side_effect=lambda **kwargs: client(**kwargs, transport=httpx.MockTransport(handler)))
 
+    def test_main_workflow_failure_exposes_actual_type_year_and_status(self):
+        os.environ.setdefault('TORBOX_API_KEY', 'torbox-fixture')
+        from functions import torboxFunctions as torbox
+        torbox.warn_no_match.cache_clear()
+        with patch.dict(os.environ, {'METADATA_PROVIDERS': 'tmdb', 'TMDB_API_KEY': 'secret-fixture'}), self.client(lambda request: httpx.Response(401)), patch.object(torbox, 'SCAN_METADATA', True), self.assertLogs(level='WARNING') as logs:
+            result, success, _ = torbox.searchMetadata('Zootopia 2', {}, 'Zootopia.2.2025.mkv', '', '', 'Zootopia 2')
+        self.assertFalse(success)
+        text = '\n'.join(logs.output)
+        self.assertIn('type=movie year=2025', text)
+        self.assertIn('"http_status": 401', text)
+        self.assertIn('"attempts"', text)
+        self.assertNotIn('secret-fixture', text)
+
+    def test_failure_summary_whitelists_provider_fields(self):
+        from functions.torboxFunctions import failure_details
+        text = failure_details([], [{'provider': 'tmdb', 'status': 'error', 'http_status': 401, 'url': 'https://api.example/?api_key=secret-fixture', 'headers': {'Authorization': 'secret-fixture'}}])
+        self.assertNotIn('secret-fixture', text)
+        self.assertIn('401', text)
+
     def test_zootopia_original_title_matches_localized_tmdb_result(self):
         def handler(request):
             self.assertEqual(request.url.params['query'], 'Zootopia 2')

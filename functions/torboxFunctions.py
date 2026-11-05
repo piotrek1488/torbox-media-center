@@ -4,9 +4,10 @@ from enum import Enum
 from library.torbox import TORBOX_API_KEY
 from library.app import SCAN_METADATA
 from functions.mediaFunctions import constructSeriesTitle, cleanTitle, cleanYear, parseMediaName
-from library.metadata import search as search_metadata
+from library.metadata import search as search_metadata, capture_diagnostics
 from functions.databaseFunctions import insertData
 import os
+import json
 import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,8 +19,22 @@ _no_match_lock = Lock()
 
 
 @lru_cache(maxsize=512)
-def warn_no_match(title, year, is_series):
-    logging.warning("No metadata match for %s; keeping filename metadata.", title)
+def warn_no_match(title, year, is_series, details=""):
+    logging.warning("No metadata match for %s; type=%s year=%s; keeping filename metadata. %s",
+                    title, "series" if is_series else "movie", year, details)
+
+
+def failure_details(candidates, events):
+    outcomes = []
+    for event in events:
+        if event.get("status") not in {"response", "no_match", "error", "skipped_missing_key"}:
+            continue
+        # Explicit whitelist: never serialize request URLs, headers or credentials.
+        summary = {key: event[key] for key in ("provider", "status", "http_status", "error_type", "results") if key in event}
+        if summary not in outcomes:
+            outcomes.append(summary)
+    return json.dumps({"attempts": candidates, "outcomes": outcomes}, ensure_ascii=False)
+
 
 
 class DownloadType(Enum):
@@ -173,14 +188,15 @@ def searchMetadata(query: str, title_data: dict, file_name: str, full_title: str
         data = None
         selected = None
         candidates = parsed.get("metadata_candidates") or [{"title": title, "year": year, "source": "filename"}]
-        for candidate in candidates:
-            data = search_metadata(candidate["title"], cleanYear(candidate.get("year")), is_series)
-            if data:
-                selected = candidate
-                break
+        with capture_diagnostics() as events:
+            for candidate in candidates:
+                data = search_metadata(candidate["title"], cleanYear(candidate.get("year")), is_series)
+                if data:
+                    selected = candidate
+                    break
         if not data:
             with _no_match_lock:
-                warn_no_match(title, year, is_series)
+                warn_no_match(title, year, is_series, failure_details(candidates, events))
             return base_metadata, False, "No metadata match."
         title = cleanTitle(data["title"])
         year = data["year"]
